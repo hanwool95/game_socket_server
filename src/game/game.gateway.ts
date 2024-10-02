@@ -15,7 +15,7 @@ import { Socket, Server } from 'socket.io';
   },
 })
 export class GameGateway
-    implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer() server: Server;
   private logger: Logger = new Logger('GameGateway');
