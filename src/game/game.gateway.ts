@@ -55,41 +55,43 @@ export class GameGateway
   }
 
   @SubscribeMessage('createRoom')
-  handleCreateRoom(client: Socket): void {
+  handleCreateRoom(client: Socket, { nickname }: { nickname: string }): void {
     const roomCode = this.generateRoomCode();
-    client.join(roomCode); // 클라이언트를 방에 참여시킴
-    this.rooms.set(roomCode, [client.id]); // 방에 사용자 추가
-    this.logger.log(`Room ${roomCode} created by ${client.id}`);
-
-    client.emit('roomCreated', roomCode); // 클라이언트에게 방 코드 전달
+    client.join(roomCode);
+    this.rooms.set(roomCode, [client.id]);
+    this.logger.log(`${nickname} created room ${roomCode}`);
+    client.emit('roomCreated', roomCode);
   }
 
   @SubscribeMessage('joinRoom')
-  handleJoinRoom(client: Socket, roomCode: string): void {
+  handleJoinRoom(
+    client: Socket,
+    { roomCode, nickname }: { roomCode: string; nickname: string },
+  ): void {
     const room = this.rooms.get(roomCode);
+    console.log('room: ', room);
     if (room) {
-      client.join(roomCode); // 방에 참여
-      room.push(client.id); // 사용자 목록에 추가
-      this.rooms.set(roomCode, room); // 업데이트된 사용자 목록 저장
-      this.logger.log(`Client ${client.id} joined room ${roomCode}`);
-
-      client.emit('joinedRoom', roomCode); // 클라이언트에게 방 참여 성공 알림
-      this.server.to(roomCode).emit('newUser', `${client.id} joined the room`);
+      client.join(roomCode);
+      room.push(client.id);
+      this.rooms.set(roomCode, room);
+      this.logger.log(`${nickname} joined room ${roomCode}`);
+      client.emit('joinedRoom', roomCode);
+      this.server.to(roomCode).emit('newUser', `${nickname} joined the room`);
     } else {
-      client.emit('error', 'Room not found'); // 방이 없을 때 에러 처리
+      client.emit('error', 'Room not found');
     }
   }
 
   @SubscribeMessage('chat')
   handleMessage(
     client: Socket,
-    { roomCode, message }: { roomCode: string; message: string },
+    {
+      roomCode,
+      message,
+      nickname,
+    }: { roomCode: string; message: string; nickname: string },
   ): void {
-    this.logger.log(
-      `Message from ${client.id} in room ${roomCode}: ${message}`,
-    );
-
-    // 같은 방의 사용자들에게 메시지 전달
-    this.server.to(roomCode).emit('chat', { sender: client.id, message });
+    this.logger.log(`Message from ${nickname} in room ${roomCode}: ${message}`);
+    this.server.to(roomCode).emit('chat', { sender: nickname, message });
   }
 }
