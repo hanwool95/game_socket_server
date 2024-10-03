@@ -15,6 +15,8 @@ import { Socket, Server } from 'socket.io';
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
+    pingInterval: 10000, // Ping 클라이언트마다 10초 간격으로 신호를 보냄
+    pingTimeout: 5000, // 5초 안에 응답이 없으면 클라이언트 연결 끊음
   },
 })
 export class GameGateway
