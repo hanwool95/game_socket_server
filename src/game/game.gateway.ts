@@ -11,7 +11,7 @@ import { Socket, Server } from 'socket.io';
 
 @WebSocketGateway({
   cors: {
-    origin: ['localhost:3000', 'https://www.ceasar.kr/'],
+    origin: ['http://localhost:3000', 'https://www.ceasar.kr/'],
   },
 })
 export class GameGateway
