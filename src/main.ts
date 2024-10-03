@@ -5,9 +5,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: 'https://www.ceasar.kr', // 허용할 도메인
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // 허용할 메서드
-    credentials: true, // 자격 증명 포함
+    origin: ['http://localhost:3000', 'https://www.ceasar.kr'],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
   });
 
   await app.listen(4000);
