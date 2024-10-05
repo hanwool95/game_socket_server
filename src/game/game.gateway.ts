@@ -169,10 +169,24 @@ export class GameGateway
       this.server
         .to(roomCode)
         .emit('yourTurn', room.nicknames[room.currentTurn]); // 현재 차례인 사용자 전송
-      this.server.to(roomCode).emit('pokemonImage', { image: room.imageUrl });
+      this.server.to(roomCode).emit('pokemonImage', {
+        image: room.imageUrl,
+        name: room.currentPokemon,
+      });
     } else {
       client.emit('error', '방장만 게임 시작을 누를 수 있습니다.');
     }
+  }
+
+  private async nextTurn({ room, roomCode }) {
+    const { image, koreanName } = await this.getRandomPokemon();
+    room.currentPokemon = koreanName;
+    room.currentHint = '';
+
+    // 차례 넘기기
+    room.currentTurn = (room.currentTurn + 1) % room.clients.length;
+    this.server.to(roomCode).emit('pokemonImage', { image, name: koreanName });
+    this.server.to(roomCode).emit('yourTurn', room.nicknames[room.currentTurn]); // 다음 차례 사용자 알림
   }
 
   @SubscribeMessage('submitGuess')
@@ -183,8 +197,6 @@ export class GameGateway
     const room = this.rooms.get(roomCode);
     if (room) {
       const correctAnswer = room.currentPokemon;
-      console.log('correctAnswer', correctAnswer);
-      console.log('guess:', guess);
       if (guess === correctAnswer) {
         const clientIndex = room.clients.indexOf(client.id);
         const updatedScore = 400 - room.currentHint.length * 100;
@@ -199,21 +211,25 @@ export class GameGateway
 점수획득: ${updatedScore}점`,
         });
 
-        // 다음 포켓몬으로 변경
-        const { image, koreanName } = await this.getRandomPokemon();
-        room.currentPokemon = koreanName;
-        room.currentHint = '';
-
-        // 차례 넘기기
-        room.currentTurn = (room.currentTurn + 1) % room.clients.length;
-        this.server.to(roomCode).emit('pokemonImage', { image });
         this.server.to(roomCode).emit('updateScores', room.scores); // 점수 업데이트
-        this.server
-          .to(roomCode)
-          .emit('yourTurn', room.nicknames[room.currentTurn]); // 다음 차례 사용자 알림
+        this.nextTurn({ room, roomCode });
       } else {
         client.emit('wrongGuess');
       }
+    }
+  }
+
+  @SubscribeMessage('skipRound')
+  async handleSkipRound(
+    client: Socket,
+    { roomCode }: { roomCode: string },
+  ): Promise<void> {
+    const room = this.rooms.get(roomCode);
+    if (room) {
+      this.server.to(roomCode).emit('gameMessage', {
+        message: `출제자가 패스하였습니다`,
+      });
+      this.nextTurn({ room, roomCode });
     }
   }
 
