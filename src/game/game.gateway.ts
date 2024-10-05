@@ -15,8 +15,8 @@ import { Socket, Server } from 'socket.io';
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
-    pingInterval: 10000, // Ping 클라이언트마다 10초 간격으로 신호를 보냄
-    pingTimeout: 5000, // 5초 안에 응답이 없으면 클라이언트 연결 끊음
+    pingInterval: 10000,
+    pingTimeout: 5000,
   },
 })
 export class GameGateway
@@ -24,13 +24,13 @@ export class GameGateway
 {
   @WebSocketServer() server: Server;
   private logger: Logger = new Logger('GameGateway');
-  private rooms: Map<string, string[]> = new Map(); // 방과 사용자 목록 관리
+  private rooms: Map<string, { clients: string[]; nicknames: string[] }> =
+    new Map();
 
   afterInit(server: Server) {
     this.logger.log('Init');
   }
 
-  // 임의의 5글자 방 코드 생성
   private generateRoomCode(): string {
     return Math.random().toString(36).substring(2, 7); // 랜덤한 5글자 코드 생성
   }
@@ -42,14 +42,16 @@ export class GameGateway
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
 
-    this.rooms.forEach((clients, roomCode) => {
-      this.rooms.set(
-        roomCode,
-        clients.filter((id) => id !== client.id),
-      );
-      if (this.rooms.get(roomCode)?.length === 0) {
+    this.rooms.forEach((room, roomCode) => {
+      room.clients = room.clients.filter((id) => id !== client.id);
+      room.nicknames = room.nicknames.filter(
+        (nickname) => nickname !== client.id,
+      ); // 닉네임 리스트에서 제거
+      if (room.clients.length === 0) {
         this.rooms.delete(roomCode); // 방에 사용자가 없으면 방 삭제
         this.logger.log(`Room ${roomCode} deleted as it is empty`);
+      } else {
+        this.server.to(roomCode).emit('updateUsers', room.nicknames); // 닉네임 리스트 업데이트
       }
     });
   }
@@ -58,9 +60,12 @@ export class GameGateway
   handleCreateRoom(client: Socket, { nickname }: { nickname: string }): void {
     const roomCode = this.generateRoomCode();
     client.join(roomCode);
-    this.rooms.set(roomCode, [client.id]);
+    this.rooms.set(roomCode, { clients: [client.id], nicknames: [nickname] });
     this.logger.log(`${nickname} created room ${roomCode}`);
     client.emit('roomCreated', roomCode);
+    this.server
+      .to(roomCode)
+      .emit('updateUsers', this.rooms.get(roomCode).nicknames);
   }
 
   @SubscribeMessage('joinRoom')
@@ -69,16 +74,20 @@ export class GameGateway
     { roomCode, nickname }: { roomCode: string; nickname: string },
   ): void {
     const room = this.rooms.get(roomCode);
-    console.log('room: ', room);
     if (room) {
+      if (room.clients.length >= 8) {
+        client.emit('error', '방이 가득 찼습니다.');
+        return;
+      }
       client.join(roomCode);
-      room.push(client.id);
+      room.clients.push(client.id);
+      room.nicknames.push(nickname);
       this.rooms.set(roomCode, room);
       this.logger.log(`${nickname} joined room ${roomCode}`);
       client.emit('joinedRoom', roomCode);
-      this.server.to(roomCode).emit('newUser', `${nickname} joined the room`);
+      this.server.to(roomCode).emit('updateUsers', room.nicknames); // 닉네임 리스트 업데이트
     } else {
-      client.emit('error', 'Room not found');
+      client.emit('error', '방을 찾지 못했습니다.');
     }
   }
 
