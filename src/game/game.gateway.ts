@@ -169,9 +169,7 @@ export class GameGateway
       this.server
         .to(roomCode)
         .emit('yourTurn', room.nicknames[room.currentTurn]); // 현재 차례인 사용자 전송
-      this.server
-        .to(roomCode)
-        .emit('pokemonImage', { image: room.imageUrl, hint: '' });
+      this.server.to(roomCode).emit('pokemonImage', { image: room.imageUrl });
     } else {
       client.emit('error', '방장만 게임 시작을 누를 수 있습니다.');
     }
@@ -185,9 +183,12 @@ export class GameGateway
     const room = this.rooms.get(roomCode);
     if (room) {
       const correctAnswer = room.currentPokemon;
+      console.log('correctAnswer', correctAnswer);
+      console.log('guess:', guess);
       if (guess === correctAnswer) {
         const clientIndex = room.clients.indexOf(client.id);
-        room.scores[clientIndex] += 300; // 정답 시 300점 추가
+        const updatedScore = 400 - room.currentHint.length * 100;
+        if (updatedScore > 0) room.scores[clientIndex] += updatedScore;
         this.logger.log(
           `${room.nicknames[clientIndex]} guessed the correct answer!`,
         );
@@ -199,9 +200,8 @@ export class GameGateway
 
         // 차례 넘기기
         room.currentTurn = (room.currentTurn + 1) % room.clients.length;
-        this.server
-          .to(roomCode)
-          .emit('pokemonImage', { image, hint: room.currentHint });
+        this.server.to(roomCode).emit('pokemonImage', { image });
+        console.log('updatedScore:', room.scores);
         this.server.to(roomCode).emit('updateScores', room.scores); // 점수 업데이트
         this.server
           .to(roomCode)
