@@ -200,7 +200,10 @@ export class GameGateway
       if (guess === correctAnswer) {
         const clientIndex = room.clients.indexOf(client.id);
         const updatedScore = 400 - room.currentHint.length * 100;
-        if (updatedScore > 0) room.scores[clientIndex] += updatedScore;
+        if (updatedScore > 0) {
+          room.scores[clientIndex] += updatedScore;
+          room.scores[room.currentTurn] += updatedScore;
+        }
         this.logger.log(
           `${room.nicknames[clientIndex]} guessed the correct answer!`,
         );
