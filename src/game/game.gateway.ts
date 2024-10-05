@@ -36,6 +36,7 @@ export class GameGateway
       scores: number[];
       currentTurn: number; // 현재 차례를 저장
       currentPokemon: string; // 현재 포켓몬의 한국어 이름 (정답)
+      imageUrl: string;
       currentHint: string; // 현재 힌트
     }
   > = new Map();
@@ -120,6 +121,7 @@ export class GameGateway
       scores: [0],
       currentTurn: 0,
       currentPokemon: koreanName,
+      imageUrl: image,
       currentHint: '',
     });
 
@@ -129,9 +131,6 @@ export class GameGateway
       .to(roomCode)
       .emit('updateUsers', this.rooms.get(roomCode).nicknames);
     client.emit('newHost', client.id);
-    this.server
-      .to(roomCode)
-      .emit('pokemonImage', { image, hint: koreanName.substring(0, 3) });
   }
 
   @SubscribeMessage('joinRoom')
@@ -170,6 +169,9 @@ export class GameGateway
       this.server
         .to(roomCode)
         .emit('yourTurn', room.nicknames[room.currentTurn]); // 현재 차례인 사용자 전송
+      this.server
+        .to(roomCode)
+        .emit('pokemonImage', { image: room.imageUrl, hint: '' });
     } else {
       client.emit('error', '방장만 게임 시작을 누를 수 있습니다.');
     }
@@ -193,7 +195,7 @@ export class GameGateway
         // 다음 포켓몬으로 변경
         const { image, koreanName } = await this.getRandomPokemon();
         room.currentPokemon = koreanName;
-        room.currentHint = koreanName.substring(0, 3);
+        room.currentHint = '';
 
         // 차례 넘기기
         room.currentTurn = (room.currentTurn + 1) % room.clients.length;
@@ -217,7 +219,6 @@ export class GameGateway
   ): Promise<void> {
     const room = this.rooms.get(roomCode);
     if (room) {
-      // 힌트 추가 (한 글자씩)
       const nextHint = room.currentHint + hint;
       this.server.to(roomCode).emit('addHint', { hint: nextHint });
     }
