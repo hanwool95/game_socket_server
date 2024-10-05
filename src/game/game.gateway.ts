@@ -199,7 +199,7 @@ export class GameGateway
       const correctAnswer = room.currentPokemon;
       if (guess === correctAnswer) {
         const clientIndex = room.clients.indexOf(client.id);
-        const updatedScore = 400 - room.currentHint.length * 100;
+        const updatedScore = 400 - (room.currentHint.length / 2) * 100;
         if (updatedScore > 0) {
           room.scores[clientIndex] += updatedScore;
           room.scores[room.currentTurn] += updatedScore;
