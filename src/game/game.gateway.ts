@@ -9,6 +9,9 @@ import {
 import { Logger } from '@nestjs/common';
 import { Socket, Server } from 'socket.io';
 
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs'; // 비동기 처리
+
 @WebSocketGateway({
   cors: {
     origin: ['http://localhost:3000', 'https://www.ceasar.kr'],
@@ -26,11 +29,45 @@ export class GameGateway
   private logger: Logger = new Logger('GameGateway');
   private rooms: Map<
     string,
-    { clients: string[]; nicknames: string[]; host: string }
+    {
+      clients: string[];
+      nicknames: string[];
+      host: string;
+      scores: number[];
+      currentTurn: number; // 현재 차례를 저장
+      currentPokemon: string; // 현재 포켓몬의 한국어 이름 (정답)
+      currentHint: string; // 현재 힌트
+    }
   > = new Map();
+
+  constructor(private readonly httpService: HttpService) {} // HttpService 추가
 
   afterInit(server: Server) {
     this.logger.log('Init');
+  }
+
+  private async getRandomPokemon(): Promise<{
+    image: string;
+    koreanName: string;
+  }> {
+    const pokemonId = Math.floor(Math.random() * 898) + 1; // 1부터 898 사이의 포켓몬 선택
+    const response = await firstValueFrom(
+      this.httpService.get(`https://pokeapi.co/api/v2/pokemon/${pokemonId}`),
+    );
+    const speciesUrl = response.data.species.url;
+    const speciesResponse = await firstValueFrom(
+      this.httpService.get(speciesUrl),
+    );
+
+    // 포켓몬 한국어 이름 가져오기
+    const koreanName = speciesResponse.data.names.find(
+      (name) => name.language.name === 'ko',
+    )?.name;
+
+    return {
+      image: response.data.sprites.front_default, // 포켓몬 이미지 URL
+      koreanName,
+    };
   }
 
   private generateRoomCode(): string {
@@ -43,44 +80,58 @@ export class GameGateway
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
-
     this.rooms.forEach((room, roomCode) => {
-      room.clients = room.clients.filter((id) => id !== client.id);
-      room.nicknames = room.nicknames.filter(
-        (nickname) => nickname !== client.id,
-      );
+      const clientIndex = room.clients.indexOf(client.id);
+      if (clientIndex !== -1) {
+        room.clients.splice(clientIndex, 1);
+        room.nicknames.splice(clientIndex, 1);
+        room.scores.splice(clientIndex, 1);
+      }
 
-      // 방장이 나가면 다음 사람이 방장이 됨
       if (room.host === client.id && room.clients.length > 0) {
         room.host = room.clients[0];
         this.logger.log(`New host for room ${roomCode} is ${room.host}`);
-        this.server.to(roomCode).emit('newHost', room.host); // 새로운 방장 전송
+        this.server.to(roomCode).emit('newHost', room.host);
       }
 
       if (room.clients.length === 0) {
-        this.rooms.delete(roomCode); // 방에 사용자가 없으면 방 삭제
+        this.rooms.delete(roomCode);
         this.logger.log(`Room ${roomCode} deleted as it is empty`);
       } else {
-        this.server.to(roomCode).emit('updateUsers', room.nicknames); // 닉네임 리스트 업데이트
+        this.server.to(roomCode).emit('updateUsers', room.nicknames);
       }
     });
   }
 
   @SubscribeMessage('createRoom')
-  handleCreateRoom(client: Socket, { nickname }: { nickname: string }): void {
+  async handleCreateRoom(
+    client: Socket,
+    { nickname }: { nickname: string },
+  ): Promise<void> {
     const roomCode = this.generateRoomCode();
     client.join(roomCode);
+
+    const { image, koreanName } = await this.getRandomPokemon();
+
     this.rooms.set(roomCode, {
       clients: [client.id],
       nicknames: [nickname],
-      host: client.id, // 방장 설정
+      host: client.id,
+      scores: [0],
+      currentTurn: 0,
+      currentPokemon: koreanName,
+      currentHint: '',
     });
+
     this.logger.log(`${nickname} created room ${roomCode}`);
     client.emit('roomCreated', roomCode);
     this.server
       .to(roomCode)
       .emit('updateUsers', this.rooms.get(roomCode).nicknames);
-    client.emit('newHost', client.id); // 방장이 되었음을 전송
+    client.emit('newHost', client.id);
+    this.server
+      .to(roomCode)
+      .emit('pokemonImage', { image, hint: koreanName.substring(0, 3) });
   }
 
   @SubscribeMessage('joinRoom')
@@ -97,6 +148,7 @@ export class GameGateway
       client.join(roomCode);
       room.clients.push(client.id);
       room.nicknames.push(nickname);
+      room.scores.push(0);
       this.rooms.set(roomCode, room);
       this.logger.log(`${nickname} joined room ${roomCode}`);
       client.emit('joinedRoom', roomCode);
@@ -107,13 +159,67 @@ export class GameGateway
   }
 
   @SubscribeMessage('startGame')
-  handleStartGame(client: Socket, { roomCode }: { roomCode: string }): void {
+  async handleStartGame(
+    client: Socket,
+    { roomCode }: { roomCode: string },
+  ): Promise<void> {
     const room = this.rooms.get(roomCode);
     if (room && room.host === client.id) {
       this.logger.log(`Game started in room ${roomCode} by host ${client.id}`);
-      this.server.to(roomCode).emit('gameStarted'); // 게임 시작 이벤트 전송
+      this.server.to(roomCode).emit('gameStarted', room.scores);
+      this.server
+        .to(roomCode)
+        .emit('yourTurn', room.nicknames[room.currentTurn]); // 현재 차례인 사용자 전송
     } else {
       client.emit('error', '방장만 게임 시작을 누를 수 있습니다.');
+    }
+  }
+
+  @SubscribeMessage('submitGuess')
+  async handleSubmitGuess(
+    client: Socket,
+    { roomCode, guess }: { roomCode: string; guess: string },
+  ): Promise<void> {
+    const room = this.rooms.get(roomCode);
+    if (room) {
+      const correctAnswer = room.currentPokemon;
+      if (guess === correctAnswer) {
+        const clientIndex = room.clients.indexOf(client.id);
+        room.scores[clientIndex] += 300; // 정답 시 300점 추가
+        this.logger.log(
+          `${room.nicknames[clientIndex]} guessed the correct answer!`,
+        );
+
+        // 다음 포켓몬으로 변경
+        const { image, koreanName } = await this.getRandomPokemon();
+        room.currentPokemon = koreanName;
+        room.currentHint = koreanName.substring(0, 3);
+
+        // 차례 넘기기
+        room.currentTurn = (room.currentTurn + 1) % room.clients.length;
+        this.server
+          .to(roomCode)
+          .emit('pokemonImage', { image, hint: room.currentHint });
+        this.server.to(roomCode).emit('updateScores', room.scores); // 점수 업데이트
+        this.server
+          .to(roomCode)
+          .emit('yourTurn', room.nicknames[room.currentTurn]); // 다음 차례 사용자 알림
+      } else {
+        client.emit('wrongGuess');
+      }
+    }
+  }
+
+  @SubscribeMessage('addHint')
+  async handleAddHint(
+    client: Socket,
+    { roomCode, hint }: { roomCode: string; hint: string },
+  ): Promise<void> {
+    const room = this.rooms.get(roomCode);
+    if (room) {
+      // 힌트 추가 (한 글자씩)
+      const nextHint = room.currentHint + hint;
+      this.server.to(roomCode).emit('addHint', { hint: nextHint });
     }
   }
 
