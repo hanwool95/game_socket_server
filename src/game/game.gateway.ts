@@ -220,6 +220,10 @@ export class GameGateway
     const room = this.rooms.get(roomCode);
     if (room) {
       const nextHint = room.currentHint + hint;
+      this.rooms.set(roomCode, {
+        ...this.rooms.get(roomCode),
+        currentHint: nextHint,
+      });
       this.server.to(roomCode).emit('addHint', { hint: nextHint });
     }
   }
