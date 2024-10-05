@@ -10,7 +10,8 @@ import { Logger } from '@nestjs/common';
 import { Socket, Server } from 'socket.io';
 
 import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs'; // 비동기 처리
+import { firstValueFrom } from 'rxjs';
+import { PrismaService } from '../prisma.service'; // 비동기 처리
 
 @WebSocketGateway({
   cors: {
@@ -41,7 +42,10 @@ export class GameGateway
     }
   > = new Map();
 
-  constructor(private readonly httpService: HttpService) {} // HttpService 추가
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly prisma: PrismaService,
+  ) {} // HttpService 추가
 
   afterInit(server: Server) {
     this.logger.log('Init');
@@ -248,6 +252,14 @@ export class GameGateway
         ...this.rooms.get(roomCode),
         currentHint: nextHint,
       });
+
+      await this.prisma.pokemonEmoji.create({
+        data: {
+          pokemon: room.currentPokemon,
+          emoji: nextHint,
+        },
+      });
+
       this.server.to(roomCode).emit('addHint', { hint: nextHint });
     }
   }
