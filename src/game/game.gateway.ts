@@ -193,6 +193,12 @@ export class GameGateway
           `${room.nicknames[clientIndex]} guessed the correct answer!`,
         );
 
+        this.server.to(roomCode).emit('gameMessage', {
+          message: `정답: ${correctAnswer}
+정답자: ${room.nicknames[clientIndex]}
+점수획득: ${updatedScore}점`,
+        });
+
         // 다음 포켓몬으로 변경
         const { image, koreanName } = await this.getRandomPokemon();
         room.currentPokemon = koreanName;
@@ -201,7 +207,6 @@ export class GameGateway
         // 차례 넘기기
         room.currentTurn = (room.currentTurn + 1) % room.clients.length;
         this.server.to(roomCode).emit('pokemonImage', { image });
-        console.log('updatedScore:', room.scores);
         this.server.to(roomCode).emit('updateScores', room.scores); // 점수 업데이트
         this.server
           .to(roomCode)
