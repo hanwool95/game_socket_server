@@ -164,12 +164,14 @@ export class GameGateway
   @SubscribeMessage('startGame')
   async handleStartGame(
     client: Socket,
-    { roomCode }: { roomCode: string },
+    { roomCode, timer }: { roomCode: string; timer: number },
   ): Promise<void> {
     const room = this.rooms.get(roomCode);
     if (room && room.host === client.id) {
       this.logger.log(`Game started in room ${roomCode} by host ${client.id}`);
-      this.server.to(roomCode).emit('gameStarted', room.scores);
+      this.server
+        .to(roomCode)
+        .emit('gameStarted', { scores: room.scores, timer: timer });
       this.server
         .to(roomCode)
         .emit('yourTurn', room.nicknames[room.currentTurn]); // 현재 차례인 사용자 전송
