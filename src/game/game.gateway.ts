@@ -263,7 +263,8 @@ export class GameGateway
     const room = this.rooms.get(roomCode);
     if (room) {
       this.server.to(roomCode).emit('gameMessage', {
-        message: `출제자가 패스하였습니다`,
+        message: `출제자가 패스하였습니다
+정답은 ${room.currentPokemon}`,
       });
       this.nextTurn({ room, roomCode });
     }
