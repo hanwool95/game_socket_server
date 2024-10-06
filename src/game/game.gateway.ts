@@ -39,6 +39,7 @@ export class GameGateway
       currentPokemon: string; // 현재 포켓몬의 한국어 이름 (정답)
       imageUrl: string;
       currentHint: string; // 현재 힌트
+      timer: number;
     }
   > = new Map();
 
@@ -127,6 +128,7 @@ export class GameGateway
       currentPokemon: koreanName,
       imageUrl: image,
       currentHint: '',
+      timer: 60,
     });
 
     this.logger.log(`${nickname} created room ${roomCode}`);
@@ -169,6 +171,8 @@ export class GameGateway
     const room = this.rooms.get(roomCode);
     if (room && room.host === client.id) {
       this.logger.log(`Game started in room ${roomCode} by host ${client.id}`);
+      room.timer = timer;
+      console.log(' room timer set: ', timer);
       this.server
         .to(roomCode)
         .emit('gameStarted', { scores: room.scores, timer: timer });
@@ -178,6 +182,7 @@ export class GameGateway
       this.server.to(roomCode).emit('pokemonImage', {
         image: room.imageUrl,
         name: room.currentPokemon,
+        timer,
       });
     } else {
       client.emit('error', '방장만 게임 시작을 누를 수 있습니다.');
@@ -191,7 +196,10 @@ export class GameGateway
 
     // 차례 넘기기
     room.currentTurn = (room.currentTurn + 1) % room.clients.length;
-    this.server.to(roomCode).emit('pokemonImage', { image, name: koreanName });
+    console.log('roomTimer: ', room.timer);
+    this.server
+      .to(roomCode)
+      .emit('pokemonImage', { image, name: koreanName, timer: room.timer });
     this.server.to(roomCode).emit('yourTurn', room.nicknames[room.currentTurn]); // 다음 차례 사용자 알림
   }
 
