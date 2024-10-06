@@ -40,6 +40,7 @@ export class GameGateway
       imageUrl: string;
       currentHint: string; // 현재 힌트
       timer: number;
+      started: boolean;
     }
   > = new Map();
 
@@ -129,6 +130,7 @@ export class GameGateway
       imageUrl: image,
       currentHint: '',
       timer: 60,
+      started: false,
     });
 
     this.logger.log(`${nickname} created room ${roomCode}`);
@@ -156,6 +158,11 @@ export class GameGateway
         return;
       }
 
+      if (room.started) {
+        client.emit('error', '이미 게임이 시작되었습니다');
+        return;
+      }
+
       client.join(roomCode);
       room.clients.push(client.id);
       room.nicknames.push(nickname);
@@ -178,7 +185,7 @@ export class GameGateway
     if (room && room.host === client.id) {
       this.logger.log(`Game started in room ${roomCode} by host ${client.id}`);
       room.timer = timer;
-      console.log(' room timer set: ', timer);
+      room.started = true;
       this.server
         .to(roomCode)
         .emit('gameStarted', { scores: room.scores, timer: timer });
