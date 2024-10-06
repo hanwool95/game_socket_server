@@ -150,6 +150,12 @@ export class GameGateway
         client.emit('error', '방이 가득 찼습니다.');
         return;
       }
+
+      if (room.nicknames.includes(nickname)) {
+        client.emit('error', '중복된 닉네임이 존재합니다');
+        return;
+      }
+
       client.join(roomCode);
       room.clients.push(client.id);
       room.nicknames.push(nickname);
