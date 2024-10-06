@@ -243,6 +243,12 @@ export class GameGateway
 
         this.server.to(roomCode).emit('updateScores', room.scores); // 점수 업데이트
         this.nextTurn({ room, roomCode });
+        await this.prisma.pokemonEmoji.create({
+          data: {
+            pokemon: room.currentPokemon,
+            emoji: room.currentHint,
+          },
+        });
       } else {
         client.emit('wrongGuess');
       }
@@ -274,13 +280,6 @@ export class GameGateway
       this.rooms.set(roomCode, {
         ...this.rooms.get(roomCode),
         currentHint: nextHint,
-      });
-
-      await this.prisma.pokemonEmoji.create({
-        data: {
-          pokemon: room.currentPokemon,
-          emoji: nextHint,
-        },
       });
 
       this.server.to(roomCode).emit('addHint', { hint: nextHint });
