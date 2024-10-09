@@ -226,7 +226,7 @@ export class GameGateway
       const correctAnswer = room.currentPokemon;
       if (guess === correctAnswer) {
         const clientIndex = room.clients.indexOf(client.id);
-        const updatedScore = 400 - (room.currentHint.length / 2) * 100;
+        const updatedScore = 400 - room.currentHint.split(' ').length * 100;
         if (updatedScore > 0) {
           room.scores[clientIndex] += updatedScore;
           room.scores[room.currentTurn] += updatedScore;
@@ -277,7 +277,7 @@ export class GameGateway
   ): Promise<void> {
     const room = this.rooms.get(roomCode);
     if (room) {
-      const nextHint = room.currentHint + hint;
+      const nextHint = room.currentHint ? room.currentHint + ' ' + hint : hint;
       this.rooms.set(roomCode, {
         ...this.rooms.get(roomCode),
         currentHint: nextHint,
