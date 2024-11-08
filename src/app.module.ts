@@ -3,13 +3,13 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { GameGateway } from './game/game.gateway';
 import { HttpModule } from '@nestjs/axios';
-import { PrismaService } from './prisma.service';
 import { YoutubeModule } from './youtube/youtube.module';
-import { ConfigModule } from '@nestjs/config';
+import {PokemonCardModule} from "./pokemon-card/pokemon-card.module";
+import {PrismaModule} from "./prisma/prisma.module";
 
 @Module({
-  imports: [HttpModule, YoutubeModule],
+  imports: [HttpModule, YoutubeModule, PokemonCardModule, PrismaModule],
   controllers: [AppController],
-  providers: [AppService, GameGateway, PrismaService],
+  providers: [AppService, GameGateway],
 })
 export class AppModule {}

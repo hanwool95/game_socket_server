@@ -11,7 +11,7 @@ import { Socket, Server } from 'socket.io';
 
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { PrismaService } from '../prisma.service'; // 비동기 처리
+import {PrismaService} from "../prisma/prisma.service";
 
 @WebSocketGateway({
   cors: {
