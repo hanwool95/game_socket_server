@@ -40,24 +40,40 @@ export class YoutubeService {
 
   async getVideoComments(videoId: string) {
     try {
-      // 댓글 목록 가져오기 (최대 5개의 댓글)
-      const commentsResponse = await this.httpService
-        .get(`${this.apiUrl}/commentThreads`, {
-          params: {
-            part: 'snippet',
-            videoId: videoId,
-            key: this.apiKey,
-            maxResults: 100,
-          },
-        })
-        .toPromise();
+      const comments = [];
+      let nextPageToken = null;
 
-      // 댓글 목록을 원하는 형식으로 변환
-      const comments = commentsResponse.data.items.map((item) => ({
-        author: item.snippet.topLevelComment.snippet.authorDisplayName,
-        text: item.snippet.topLevelComment.snippet.textDisplay,
-        likeCount: item.snippet.topLevelComment.snippet.likeCount,
-      }));
+      // nextPageToken이 존재할 때까지 모든 페이지를 반복하여 가져옴
+      do {
+        const commentsResponse = await this.httpService
+            .get(`${this.apiUrl}/commentThreads`, {
+              params: {
+                part: 'snippet',
+                videoId: videoId,
+                key: this.apiKey,
+                maxResults: 100,
+                pageToken: nextPageToken,
+              },
+            })
+            .toPromise();
+
+        const { items, nextPageToken: newNextPageToken } = commentsResponse.data;
+
+        console.log("newNextPageToken", newNextPageToken);
+
+        // 댓글을 원하는 형식으로 변환하여 저장
+        const currentComments = items.map((item) => ({
+          author: item.snippet.topLevelComment.snippet.authorDisplayName,
+          text: item.snippet.topLevelComment.snippet.textDisplay,
+          likeCount: item.snippet.topLevelComment.snippet.likeCount,
+        }));
+
+        comments.push(...currentComments);
+
+        // 다음 페이지 요청을 위해 토큰 갱신
+        nextPageToken = newNextPageToken;
+
+      } while (nextPageToken); // nextPageToken이 없을 때까지 반복
 
       return comments;
     } catch (error) {
