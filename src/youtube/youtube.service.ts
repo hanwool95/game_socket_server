@@ -47,6 +47,7 @@ export class YoutubeService {
             part: 'snippet',
             videoId: videoId,
             key: this.apiKey,
+            maxResults: 100,
           },
         })
         .toPromise();
